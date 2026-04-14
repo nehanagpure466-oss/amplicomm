@@ -22,7 +22,7 @@
       "type": "featured-collection",
       "name": "t:sections.featured-collection.presets.name",
       "settings": {
-        "collection": "amplicomm",
+        "collection": "amplicomm-featured",
         "products_to_show": 25,
         "title": "Featured collection",
         "heading_size": "h1",

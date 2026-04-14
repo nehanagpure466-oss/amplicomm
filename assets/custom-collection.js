@@ -1,104 +1,65 @@
-let featuredProducts = [];
-let normalProducts = [];
-let renderedProducts = new Set();
-
 let currentPage = 1;
-let normalIndex = 0;
 let isLoading = false;
-let allFetched = false;
+let finished = false;
 
-// Detect sorting/filtering
-const hasQueryParams = window.location.search.includes('sort_by') || window.location.search.includes('filter');
+// Disable infinite scroll when filters/sorting active
+const hasParams =
+  window.location.search.includes('sort_by') ||
+  window.location.search.includes('filter');
 
-if (!hasQueryParams) {
-  init();
+if (!hasParams) {
+  document.addEventListener("DOMContentLoaded", () => {
+    initScroll();
+  });
 }
 
+// Fetch next page and extract ONLY products
 async function fetchProducts(page) {
-  const res = await fetch(`${window.location.pathname}/products.json?page=${page}`);
-  const data = await res.json();
+  const url = `${window.location.pathname}?page=${page}`;
+  const res = await fetch(url);
+  const text = await res.text();
 
-  if (data.products.length === 0) {
-    allFetched = true;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "text/html");
+
+  const newGrid = doc.querySelector("#product-grid");
+
+  if (!newGrid) {
+    finished = true;
+    return "";
+  }
+
+  return newGrid.innerHTML;
+}
+
+// Append products
+function renderProducts(html) {
+  const container = document.querySelector("#product-grid");
+  container.insertAdjacentHTML("beforeend", html);
+}
+
+// Load next page
+async function loadMore() {
+  if (isLoading || finished) return;
+
+  isLoading = true;
+  currentPage++;
+
+  const html = await fetchProducts(currentPage);
+
+  if (!html.trim()) {
+    finished = true;
+    document.getElementById("infinite-loader").innerText = "No more products";
     return;
   }
 
-  data.products.forEach(product => {
-    if (renderedProducts.has(product.id)) return;
-
-    if (product.tags.includes('featured')) {
-      featuredProducts.push(product);
-    } else {
-      normalProducts.push(product);
-    }
-  });
-}
-
-async function init() {
-  let page = 1;
-
-  // Fetch until we get all 15 featured
-  while (featuredProducts.length < 15 && !allFetched) {
-    await fetchProducts(page);
-    page++;
-  }
-
-  currentPage = page;
-
-  // Render initial: 15 featured + 5 normal
-  renderProducts([
-    ...featuredProducts,
-    ...normalProducts.slice(0, 5)
-  ]);
-
-  normalIndex = 5;
-
-  observeScroll();
-}
-
-function renderProducts(products) {
-  const container = document.getElementById('product-grid');
-
-  products.forEach(product => {
-    if (renderedProducts.has(product.id)) return;
-
-    renderedProducts.add(product.id);
-
-    const html = `
-      <li class="grid__item">
-        <a href="/products/${product.handle}">
-          <img src="${product.images[0]?.src}" width="200"/>
-          <h3>${product.title}</h3>
-          <p>₹${product.variants[0].price}</p>
-        </a>
-      </li>
-    `;
-
-    container.insertAdjacentHTML('beforeend', html);
-  });
-}
-
-async function loadMore() {
-  if (isLoading || allFetched) return;
-
-  isLoading = true;
-
-  let nextBatch = normalProducts.slice(normalIndex, normalIndex + 20);
-
-  if (nextBatch.length < 20 && !allFetched) {
-    await fetchProducts(currentPage++);
-    nextBatch = normalProducts.slice(normalIndex, normalIndex + 20);
-  }
-
-  renderProducts(nextBatch);
-
-  normalIndex += 20;
+  renderProducts(html);
   isLoading = false;
 }
 
-// Intersection Observer
-function observeScroll() {
-  const loader = document.getElementById('loader');
+// Scroll trigger
+function initScroll() {
+  const loader = document.getElementById("infinite-loader");
 
   const observer = new IntersectionObserver(entries => {
     if (entries[0].isIntersecting) {
